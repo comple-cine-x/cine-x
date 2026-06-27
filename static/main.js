@@ -97,6 +97,8 @@ function buscar() {
   ['secComunidad','secBFS','secPD','secHistorial'].forEach(id =>
     document.getElementById(id).style.display = 'none'
   );
+  document.getElementById('grafoCta').style.display = 'flex';
+  cerrarGrafoModal();
   cargarComunidad(raw);
   cargarBFS(raw);
   cargarPD(raw);
@@ -107,6 +109,8 @@ function irInicio() {
   usuarioActual = '';
   document.getElementById('inputUsuario').value = '';
   document.getElementById('mainContent').classList.remove('active');
+  document.getElementById('grafoCta').style.display = 'none';
+  cerrarGrafoModal();
   document.getElementById('hero').style.display = 'flex';
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -487,7 +491,197 @@ async function initHeroBackdrop() {
   }, 7000);
 }
 
+// ── GRAFO (D3 force-directed con zoom, en modal) ─────
+let grafoZoom = null;
+let grafoSvg = null;
+let grafoCargadoPara = null;
+
+function abrirGrafoModal() {
+  if (!usuarioActual) return;
+  const modal = document.getElementById('grafoModal');
+  modal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  // Render perezoso: solo (re)construir si cambió el usuario
+  if (grafoCargadoPara !== usuarioActual) {
+    grafoCargadoPara = usuarioActual;
+    requestAnimationFrame(() => cargarGrafo(usuarioActual));
+  }
+}
+
+function cerrarGrafoModal() {
+  const modal = document.getElementById('grafoModal');
+  if (modal) modal.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+async function cargarGrafo(uid) {
+  const canvas = document.getElementById('grafoCanvas');
+  canvas.innerHTML = `<span class="state-msg"><span class="spinner"></span>Construyendo grafo...</span>`;
+
+  let data;
+  try {
+    const res = await fetch(`/api/grafo/${uid}`);
+    data = await res.json();
+  } catch {
+    canvas.innerHTML = `<span class="state-msg">Error al cargar el grafo.</span>`;
+    return;
+  }
+
+  if (!data.nodes || !data.nodes.length) {
+    canvas.innerHTML = `<span class="state-msg">Sin datos de grafo para este usuario.</span>`;
+    return;
+  }
+  if (typeof d3 === 'undefined') {
+    canvas.innerHTML = `<span class="state-msg">No se pudo cargar la librería de visualización.</span>`;
+    return;
+  }
+
+  renderGrafo(canvas, data);
+}
+
+function renderGrafo(canvas, data) {
+  canvas.innerHTML = '';
+
+  const width  = canvas.clientWidth  || 800;
+  const height = canvas.clientHeight || 560;
+
+  // Copias mutables para la simulación
+  const nodes = data.nodes.map(n => Object.assign({}, n));
+  const links = data.edges.map(e => Object.assign({}, e));
+
+  const COLORS = {
+    central: '#C9A227',
+    usuario: '#8B3A3A',
+    pelicula: '#5DA8FF',
+  };
+  function nodeColor(n) {
+    if (n.central) return COLORS.central;
+    return n.tipo === 'usuario' ? COLORS.usuario : COLORS.pelicula;
+  }
+  function nodeRadius(n) {
+    if (n.central) return 16;
+    return n.tipo === 'usuario' ? 9 : 7;
+  }
+
+  const svg = d3.select(canvas).append('svg')
+    .attr('viewBox', [0, 0, width, height])
+    .attr('preserveAspectRatio', 'xMidYMid meet');
+
+  // Capa que se transforma con el zoom
+  const g = svg.append('g');
+
+  const zoom = d3.zoom()
+    .scaleExtent([0.2, 6])
+    .on('zoom', (event) => g.attr('transform', event.transform));
+  svg.call(zoom);
+  svg.on('dblclick.zoom', null);
+
+  grafoSvg  = svg;
+  grafoZoom = zoom;
+
+  // Tooltip
+  const tooltip = d3.select(canvas).append('div').attr('class', 'grafo-tooltip');
+
+  const maxW = d3.max(links, d => d.weight) || 5;
+
+  const sim = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(links).id(d => d.id)
+      .distance(d => (d.tipo === 'compartida' ? 90 : 70))
+      .strength(0.25))
+    .force('charge', d3.forceManyBody().strength(-160))
+    .force('center', d3.forceCenter(width / 2, height / 2))
+    .force('collide', d3.forceCollide().radius(d => nodeRadius(d) + 6));
+
+  const link = g.append('g')
+    .selectAll('line')
+    .data(links)
+    .join('line')
+    .attr('class', d => 'grafo-link ' + (d.tipo || ''))
+    .attr('stroke-width', d => 0.6 + (d.weight / maxW) * 2.2);
+
+  const node = g.append('g')
+    .selectAll('g')
+    .data(nodes)
+    .join('g')
+    .attr('class', d => 'grafo-node' + (d.central ? ' central' : ''))
+    .call(d3.drag()
+      .on('start', (event, d) => {
+        if (!event.active) sim.alphaTarget(0.3).restart();
+        d.fx = d.x; d.fy = d.y;
+      })
+      .on('drag', (event, d) => { d.fx = event.x; d.fy = event.y; })
+      .on('end', (event, d) => {
+        if (!event.active) sim.alphaTarget(0);
+        d.fx = null; d.fy = null;
+      }));
+
+  node.append('circle')
+    .attr('r', nodeRadius)
+    .attr('fill', nodeColor);
+
+  // Etiqueta: ID para usuarios; título corto para películas
+  node.append('text')
+    .attr('class', 'grafo-label')
+    .attr('dy', d => nodeRadius(d) + 11)
+    .text(d => {
+      if (d.tipo === 'usuario') return d.label;
+      const t = fixArticle((d.label || '').replace(/\s*\(\d{4}\).*$/, '').trim());
+      return t.length > 20 ? t.slice(0, 18) + '…' : t;
+    });
+
+  // Interacciones
+  node
+    .on('mouseenter', (event, d) => {
+      let html;
+      if (d.tipo === 'usuario') {
+        html = `<strong>${d.label}</strong><span class="tt-meta">${d.central ? 'Usuario actual' : 'Comunidad'}</span>`;
+      } else {
+        const clean = fixArticle((d.label || '').replace(/\s*\(\d{4}\).*$/, '').trim());
+        const yr = ((d.label || '').match(/\((\d{4})\)/) || [])[1] || '';
+        html = `<strong>${clean}</strong><span class="tt-meta">${yr ? yr + ' · ' : ''}Película vista</span>`;
+      }
+      tooltip.html(html).classed('show', true);
+    })
+    .on('mousemove', (event) => {
+      const [mx, my] = d3.pointer(event, canvas);
+      const tw = tooltip.node().offsetWidth;
+      tooltip.style('left', Math.min(mx + 12, canvas.clientWidth - tw - 8) + 'px')
+             .style('top', (my + 12) + 'px');
+    })
+    .on('mouseleave', () => tooltip.classed('show', false))
+    .on('click', (event, d) => {
+      if (d.tipo === 'pelicula') openMovieModal(d.label);
+      else if (!d.central) {
+        document.getElementById('inputUsuario').value = d.id;
+        buscar();
+      }
+    });
+
+  sim.on('tick', () => {
+    link
+      .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+      .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+    node.attr('transform', d => `translate(${d.x},${d.y})`);
+  });
+
+  // Controles de zoom
+  const zIn  = document.getElementById('grafoZoomIn');
+  const zOut = document.getElementById('grafoZoomOut');
+  const zRst = document.getElementById('grafoReset');
+  if (zIn)  zIn.onclick  = () => svg.transition().duration(250).call(zoom.scaleBy, 1.4);
+  if (zOut) zOut.onclick = () => svg.transition().duration(250).call(zoom.scaleBy, 1 / 1.4);
+  if (zRst) zRst.onclick = () => svg.transition().duration(350).call(zoom.transform, d3.zoomIdentity);
+}
+
 initHeroBackdrop();
+
+// ── Eventos del modal del grafo ──────────────
+document.getElementById('btnAbrirGrafo').addEventListener('click', abrirGrafoModal);
+document.getElementById('grafoClose').addEventListener('click', cerrarGrafoModal);
+document.getElementById('grafoOverlay').addEventListener('click', cerrarGrafoModal);
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') cerrarGrafoModal();
+});
 
 
 

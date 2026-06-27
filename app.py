@@ -43,6 +43,85 @@ def api_comunidad(usuario_id):
     return jsonify({"comunidad": grupo})
 
 
+@app.route("/api/grafo/<usuario_id>")
+def api_grafo(usuario_id):
+    if usuario_id not in grafo.nodes:
+        return jsonify({"error": "Usuario no encontrado"}), 404
+
+    # Limites para mantener la visualizacion legible y rapida
+    MAX_VECINOS = int(request.args.get("max_vecinos", 12))
+    MAX_PELIS_VECINO = 8
+
+    # Peliculas que ha visto el usuario central (sus "vistas")
+    pelis_usuario = [
+        n for n in grafo.neighbors(usuario_id)
+        if grafo.nodes[n].get("tipo") == "pelicula"
+    ]
+    set_pelis_usuario = set(pelis_usuario)
+
+    nodos = {}
+    aristas = []
+
+    def agregar_nodo(node_id, tipo, **extra):
+        if node_id not in nodos:
+            datos = {"id": node_id, "tipo": tipo}
+            datos.update(extra)
+            nodos[node_id] = datos
+        return nodos[node_id]
+
+    # Nodo central
+    agregar_nodo(usuario_id, "usuario", label=usuario_id, central=True)
+
+    # Peliculas del usuario central + aristas (con su rating)
+    for m in pelis_usuario:
+        agregar_nodo(
+            m, "pelicula",
+            label=grafo.nodes[m].get("titulo", "Desconocida"),
+            titulo=grafo.nodes[m].get("titulo", "Desconocida"),
+        )
+        aristas.append({
+            "source": usuario_id,
+            "target": m,
+            "weight": grafo[usuario_id][m]["weight"],
+            "tipo": "propia",
+        })
+
+    # Vecinos de la comunidad conectados a traves de peliculas en comun
+    grupo = uf_mod.obtener_grupo_de_usuario(comunidades, usuario_id)
+    vecinos = [u for u in grupo if u != usuario_id]
+
+    # Ordenar vecinos por cantidad de peliculas compartidas (mas relevante primero)
+    vecinos_con_comunes = []
+    for v in vecinos:
+        comunes = set(grafo.neighbors(v)) & set_pelis_usuario
+        if comunes:
+            vecinos_con_comunes.append((v, comunes))
+    vecinos_con_comunes.sort(key=lambda x: len(x[1]), reverse=True)
+
+    for v, comunes in vecinos_con_comunes[:MAX_VECINOS]:
+        agregar_nodo(v, "usuario", label=v, central=False)
+        for m in list(comunes)[:MAX_PELIS_VECINO]:
+            aristas.append({
+                "source": v,
+                "target": m,
+                "weight": grafo[v][m]["weight"],
+                "tipo": "compartida",
+            })
+
+    resumen = {
+        "usuarios": sum(1 for n in nodos.values() if n["tipo"] == "usuario"),
+        "peliculas": sum(1 for n in nodos.values() if n["tipo"] == "pelicula"),
+        "aristas": len(aristas),
+    }
+
+    return jsonify({
+        "central": usuario_id,
+        "nodes": list(nodos.values()),
+        "edges": aristas,
+        "resumen": resumen,
+    })
+
+
 @app.route("/api/usuario/<usuario_id>/peliculas")
 def api_peliculas_vistas(usuario_id):
     if usuario_id not in grafo.nodes:

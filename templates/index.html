@@ -51,11 +51,11 @@
       basadas en análisis de grafos con datos reales de MovieLens.
     </p>
     <div class="hero-chips">
+    <div class="hero-chip" data-uid="U26">U26</div>
     <div class="hero-chip" data-uid="U3">U3</div>
-    <div class="hero-chip" data-uid="U60">U60</div>
     <div class="hero-chip" data-uid="U30">U30</div>
     <div class="hero-chip" data-uid="U36">U36</div>
-    <div class="hero-chip" data-uid="U12">U12</div>
+    <div class="hero-chip" data-uid="U72">U72</div>
   </div>
 
     <div class="hero-stats">
@@ -114,10 +114,47 @@
       <div class="movie-grid" id="historialGrid"></div>
     </div>
 
+    <div class="grafo-cta" id="grafoCta" style="display:none">
+      <button class="grafo-open-btn" id="btnAbrirGrafo">
+        <span class="section-badge badge-grafo">Grafo</span>
+        Ver visualización del grafo
+      </button>
+    </div>
+
   </main>
 
 </div>
 
+<div id="grafoModal">
+  <div class="modal-overlay" id="grafoOverlay"></div>
+  <div class="grafo-modal-box">
+    <div class="grafo-modal-header">
+      <span class="section-badge badge-grafo">Grafo</span>
+      <span class="section-title">Visualización del Grafo</span>
+      <button class="modal-close" id="grafoClose">&#x2715;</button>
+    </div>
+    <div class="grafo-wrap">
+      <div class="grafo-toolbar">
+        <div class="grafo-legend">
+          <span class="leg-item"><span class="leg-dot leg-central"></span>Usuario actual</span>
+          <span class="leg-item"><span class="leg-dot leg-user"></span>Comunidad</span>
+          <span class="leg-item"><span class="leg-dot leg-movie"></span>Película vista</span>
+        </div>
+        <div class="grafo-controls">
+          <button class="grafo-btn" id="grafoZoomOut" title="Alejar">&#x2212;</button>
+          <button class="grafo-btn" id="grafoZoomIn" title="Acercar">&#x002B;</button>
+          <button class="grafo-btn grafo-btn-reset" id="grafoReset" title="Reiniciar vista">Centrar</button>
+        </div>
+      </div>
+      <div class="grafo-canvas" id="grafoCanvas">
+        <span class="state-msg"><span class="spinner"></span>Construyendo grafo...</span>
+      </div>
+      <div class="grafo-hint">Arrastra para mover · rueda o botones para zoom · clic en una película para ver detalles</div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/d3.min.js"></script>
 <script src="/static/main.js"></script>
 <style>
 #cinexModal { display:none; position:fixed; inset:0; z-index:1000; }

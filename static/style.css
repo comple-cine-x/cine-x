@@ -539,3 +539,185 @@ main.active { display: block; }
   .how-card:first-child { border-top: none; padding-top: 0; }
   .movie-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 14px; }
 }
+
+/* ═══════════════════════════════════════════
+   GRAFO — Visualización del grafo (D3)
+   ═══════════════════════════════════════════ */
+.badge-grafo { color: #C77BAE; border: 1px solid rgba(199,123,174,0.35); background: rgba(199,123,174,0.08); }
+
+.grafo-wrap {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  overflow: hidden;
+}
+
+.grafo-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--card2);
+}
+
+.grafo-legend { display: flex; gap: 18px; flex-wrap: wrap; }
+.leg-item {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-family: 'IBM Plex Mono', monospace; font-size: 10px;
+  letter-spacing: 0.04em; color: var(--gray2); text-transform: uppercase;
+}
+.leg-dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+.leg-central { background: var(--gold); box-shadow: 0 0 8px 1px rgba(201,162,39,0.5); }
+.leg-user    { background: #8B3A3A; }
+.leg-movie   { background: #5DA8FF; }
+
+.grafo-controls { display: flex; gap: 8px; }
+.grafo-btn {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 14px; line-height: 1;
+  min-width: 34px; height: 30px; padding: 0 10px;
+  background: var(--card);
+  color: var(--cream);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: border-color 0.18s, color 0.18s, background 0.18s;
+}
+.grafo-btn:hover { border-color: rgba(201,162,39,0.5); color: var(--gold); }
+.grafo-btn-reset { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; }
+
+.grafo-canvas {
+  position: relative;
+  width: 100%;
+  height: 560px;
+  background:
+    radial-gradient(circle at 50% 40%, rgba(201,162,39,0.04), transparent 60%),
+    var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  cursor: grab;
+}
+.grafo-canvas:active { cursor: grabbing; }
+.grafo-canvas svg { width: 100%; height: 100%; display: block; }
+
+.grafo-link { stroke: var(--border); stroke-opacity: 0.55; }
+.grafo-link.compartida { stroke: rgba(139,58,58,0.45); }
+
+.grafo-node { cursor: pointer; }
+.grafo-node circle { stroke: var(--bg); stroke-width: 1.5px; transition: stroke 0.15s; }
+.grafo-node.central circle { stroke: var(--gold); stroke-width: 2px; }
+.grafo-node:hover circle { stroke: var(--gold); }
+
+.grafo-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  fill: var(--gray2);
+  pointer-events: none;
+  text-anchor: middle;
+}
+.grafo-node.central .grafo-label { fill: var(--gold); font-size: 11px; }
+
+.grafo-tooltip {
+  position: absolute;
+  z-index: 5;
+  pointer-events: none;
+  max-width: 240px;
+  padding: 7px 10px;
+  background: rgba(24,22,20,0.96);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  color: var(--cream);
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.12s, transform 0.12s;
+}
+.grafo-tooltip.show { opacity: 1; transform: translateY(0); }
+.grafo-tooltip .tt-meta {
+  display: block; margin-top: 3px;
+  font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--gold);
+}
+
+.grafo-hint {
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px; letter-spacing: 0.03em;
+  color: var(--gray2);
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .grafo-canvas { height: 420px; }
+  .grafo-toolbar { gap: 10px; }
+  .grafo-legend { gap: 12px; }
+}
+
+/* ── Grafo: botón al final + modal ─────────── */
+.grafo-cta {
+  display: flex;
+  justify-content: center;
+  margin: 10px 0 70px;
+}
+.grafo-open-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-family: 'Fraunces', serif;
+  font-size: 16px;
+  color: var(--cream);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 26px;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s, transform 0.2s, background 0.2s;
+}
+.grafo-open-btn:hover {
+  border-color: rgba(199,123,174,0.6);
+  background: rgba(199,123,174,0.06);
+  transform: translateY(-2px);
+}
+
+#grafoModal { display: none; position: fixed; inset: 0; z-index: 1000; }
+#grafoModal.open { display: flex; align-items: center; justify-content: center; padding: 24px; }
+
+.grafo-modal-box {
+  position: relative;
+  z-index: 1001;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 1040px;
+  max-height: 92vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.grafo-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.grafo-modal-header .modal-close {
+  margin-left: auto;
+  position: static;
+}
+.grafo-modal-box .grafo-wrap { border: none; border-radius: 0; }
+.grafo-modal-box .grafo-canvas { height: 60vh; min-height: 360px; }
+
+@media (max-width: 640px) {
+  #grafoModal.open { padding: 0; }
+  .grafo-modal-box { max-height: 100vh; height: 100vh; border-radius: 0; }
+  .grafo-modal-box .grafo-canvas { height: 56vh; }
+  .grafo-open-btn { font-size: 14px; padding: 12px 20px; }
+}
