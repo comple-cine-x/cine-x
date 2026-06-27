@@ -1,6 +1,5 @@
 ﻿.env
 __pycache__/
-*.pkl
 *.pyc
 ml-25m/
 
