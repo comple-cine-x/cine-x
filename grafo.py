@@ -6,7 +6,10 @@ RUTA_RATINGS = "ml-25m/ratings.csv"
 RUTA_MOVIES = "ml-25m/movies.csv"
 RUTA_GRAFO_GUARDADO = "grafo.pkl"
 
-MIN_VALORACIONES_POR_PELICULA = 500
+
+MAX_USUARIOS = 100
+usuarios_seleccionados = set()
+MIN_VALORACIONES_POR_PELICULA = 50
 
 
 def cargar_titulos_peliculas(ruta_movies):
@@ -39,17 +42,18 @@ def construir_grafo(ruta_ratings, titulos_peliculas, conteo_valoraciones):
     with open(ruta_ratings, "r", encoding="utf-8") as archivo:
         lector = csv.DictReader(archivo)
 
-        LIMITE = 200000  
+        for fila in lector:
+            user_id = fila["userId"]
 
-        for i, fila in enumerate(lector):
-            if i >= LIMITE:
-                break
+            if user_id not in usuarios_seleccionados:
+                if len(usuarios_seleccionados) >= MAX_USUARIOS:
+                    continue
+                usuarios_seleccionados.add(user_id)
 
             movie_id = fila["movieId"]
             if movie_id not in peliculas_aceptadas:
                 continue
 
-            user_id = fila["userId"]
             rating = float(fila["rating"])
 
             nodo_usuario = "U" + user_id
@@ -61,9 +65,7 @@ def construir_grafo(ruta_ratings, titulos_peliculas, conteo_valoraciones):
                 tipo="pelicula",
                 titulo=titulos_peliculas.get(movie_id, "Desconocida"),
             )
-
             grafo.add_edge(nodo_usuario, nodo_pelicula, weight=rating)
-
     return grafo
 
 
@@ -96,11 +98,6 @@ def main():
     print(f"  Peliculas: {len(nodos_pelicula)}")
     print(f"  Nodos totales: {grafo.number_of_nodes()}")
     print(f"  Aristas (valoraciones): {grafo.number_of_edges()}")
-
-    usuarios = [n for n, d in grafo.nodes(data=True) if d.get("tipo") == "usuario"]
-
-    print("Primeros 20 usuarios:")
-    print(usuarios[:20])
 
     print()
     print(f"Guardando grafo en {RUTA_GRAFO_GUARDADO}...")
